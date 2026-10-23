@@ -1,0 +1,740 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Maxwell–Boltzmann Box</title>
+<meta name="description" content="Four hundred colliding particles start at one speed and relax into the Maxwell–Boltzmann curve, in 2D or 3D. Heat the gas or change the particle mass and watch the peak move.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Maxwell–Boltzmann Box">
+<meta property="og:description" content="Four hundred colliding particles start at one speed and relax into the Maxwell–Boltzmann curve, in 2D or 3D. Heat the gas or change the particle mass and watch the peak move.">
+<meta property="og:url" content="https://rrtrytcg.github.io/maxwell-boltzmann-box/">
+<meta property="og:image" content="https://rrtrytcg.github.io/maxwell-boltzmann-box/preview.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap">
+<style>
+/* Layout: the box and its speed histogram sit side by side; controls and velocity space sit under them; everything stacks on phones.
+   The gas chamber and velocity space are always dark (a cyanotype window) so the speed colours read in both themes. */
+:root {
+  color-scheme: light;
+  --bg: #E8ECF2;
+  --panel: #F5F7FA;
+  --ink: #11203B;
+  --muted: #58698A;
+  --rule: #C2CDDC;
+  --bar: #3A68A8;
+  --curve: #C2410C;
+  --ghost: #6F83A3;
+  --focus: #C2410C;
+  --field: #0F1D38;
+  --fline: #29406B;
+  --ftext: #9FB3D4;
+  --c0: #4F97F2;
+  --c1: #4DD2BF;
+  --c2: #F5D45C;
+  --c3: #FF6B3A;
+  --font-display: "Instrument Serif", Georgia, "Times New Roman", serif;
+  --font-body: "Hanken Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0A1630;
+    --panel: #10203F;
+    --ink: #E6EEFA;
+    --muted: #8FA3C4;
+    --rule: #233A62;
+    --bar: #6FAAF0;
+    --curve: #FFB04D;
+    --ghost: #6A82A8;
+    --focus: #FFB04D;
+    --field: #07101F;
+    --fline: #1E3257;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0A1630;
+  --panel: #10203F;
+  --ink: #E6EEFA;
+  --muted: #8FA3C4;
+  --rule: #233A62;
+  --bar: #6FAAF0;
+  --curve: #FFB04D;
+  --ghost: #6A82A8;
+  --focus: #FFB04D;
+  --field: #07101F;
+  --fline: #1E3257;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.45;
+}
+.page {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding-block: 22px 44px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+header { margin-bottom: 20px; display: grid; gap: 8px; }
+h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(36px, 6vw, 60px);
+  line-height: 1;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+h1 em { font-style: italic; color: var(--curve); }
+.lede { margin: 0; max-width: 64ch; color: var(--muted); font-size: 16px; }
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.col { display: grid; gap: 16px; align-content: start; min-width: 0; }
+.p1 { order: 1; } .p2 { order: 2; } .p3 { order: 3; } .p4 { order: 4; }
+@media (max-width: 900px) { .grid { grid-template-columns: minmax(0, 1fr); } .col { display: contents; } }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 12px;
+  min-width: 0;
+}
+.ph { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+h2 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+canvas.cv { display: block; width: 100%; height: auto; border-radius: 3px; }
+canvas.box { aspect-ratio: 8 / 5; background: var(--field); border: 1px solid var(--rule); }
+canvas.hist { aspect-ratio: 16 / 10; }
+canvas.vel { aspect-ratio: 1 / 1; background: var(--field); border: 1px solid var(--rule); }
+@media (max-width: 560px) { canvas.hist { aspect-ratio: 16 / 11; } }
+
+.key { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+.key .ramp { flex: 0 1 180px; height: 8px; border-radius: 4px; background: linear-gradient(90deg, var(--c0), var(--c1), var(--c2), var(--c3)); }
+
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { display: inline-block; width: 16px; height: 0; border-top: 3px solid; }
+.sw.bar { height: 10px; border-top: 0; background: var(--bar); opacity: 0.65; border-radius: 1px; }
+.sw.theory { border-color: var(--curve); }
+.sw.ghost { border-color: var(--ghost); border-top-style: dashed; border-top-width: 2px; }
+.hint { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  margin-top: 12px;
+  background: var(--rule);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  overflow: hidden;
+}
+@media (max-width: 560px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.stat { background: var(--panel); padding: 8px 10px; min-width: 0; }
+.stat .k { display: block; font-size: 11px; color: var(--muted); }
+.stat .v { display: block; font-family: var(--font-mono); font-weight: 500; font-size: 22px; line-height: 1.25; font-variant-numeric: tabular-nums; }
+.stat .s { display: block; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.meter { height: 4px; margin-top: 5px; background: var(--rule); border-radius: 2px; overflow: hidden; }
+.meter i { display: block; height: 100%; width: 0; background: var(--curve); }
+
+.formula { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--rule); }
+.eq { font-family: var(--font-display); font-size: 26px; line-height: 1.3; overflow-x: auto; padding-bottom: 2px; }
+.eq i { font-style: italic; }
+.eq sup { font-size: 0.62em; line-height: 0; }
+.eqnote { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+
+.ctl-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px 24px; margin-bottom: 14px; }
+.ctl label.top { display: flex; justify-content: space-between; align-items: baseline; font-size: 14px; font-weight: 500; }
+.ctl output { font-family: var(--font-mono); font-size: 14px; font-variant-numeric: tabular-nums; }
+.ctl input[type="range"] { width: 100%; margin: 8px 0 2px; accent-color: var(--curve); }
+.ctl .ends { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+.row { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; padding-top: 12px; margin-top: 12px; border-top: 1px solid var(--rule); }
+.row .lbl { font-size: 13px; color: var(--muted); min-width: 84px; }
+
+button {
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 6px 12px;
+  min-height: 36px;
+  cursor: pointer;
+}
+button:hover { background: color-mix(in srgb, var(--bar) 14%, transparent); }
+button[aria-pressed="true"] { border-color: var(--ink); }
+button.solid { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+.btns { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.seg { position: relative; display: inline-flex; border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg label { display: flex; align-items: center; min-height: 34px; padding: 4px 12px; font-size: 13px; cursor: pointer; }
+.seg input:checked + label { background: var(--ink); color: var(--panel); }
+.seg input:focus-visible + label { outline: 2px solid var(--focus); outline-offset: -2px; }
+button:focus-visible, input[type="range"]:focus-visible, .chk input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.chk { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; min-height: 34px; }
+.chk input { accent-color: var(--curve); width: 16px; height: 16px; }
+
+.vwrap { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; align-items: center; }
+.vwrap p { margin: 0; font-size: 13px; color: var(--muted); }
+.vwrap p + p { margin-top: 8px; }
+.foot { margin: 20px 0 0; font-size: 13px; color: var(--muted); }
+.foot a { color: var(--ink); }
+</style>
+</head>
+<body>
+<main class="page">
+  <header>
+    <h1>Maxwell–Boltzmann <em>Box</em></h1>
+    <p class="lede">Four hundred hard particles bounce off the walls and off each other. They start at one identical speed. Every collision is elastic, yet the swapped energy spreads the speeds into a single fixed curve.</p>
+  </header>
+
+  <div class="grid">
+    <div class="col">
+    <section class="panel p1" aria-label="Gas in a box">
+      <div class="ph">
+        <h2>The box</h2>
+        <div class="seg" role="radiogroup" aria-label="Dimensions">
+          <input type="radio" name="dim" id="dim2" value="2" checked><label for="dim2">2D</label>
+          <input type="radio" name="dim" id="dim3" value="3"><label for="dim3">3D</label>
+        </div>
+      </div>
+      <canvas id="box" class="cv box" role="img" aria-label="Animated gas particles bouncing in a box, coloured by speed"></canvas>
+      <div class="key"><span>slow</span><span class="ramp"></span><span>fast</span></div>
+    </section>
+
+    <section class="panel p3" aria-label="Controls">
+      <div class="ph"><h2>Controls</h2></div>
+      <div class="ctl-grid">
+        <div class="ctl">
+          <label class="top" for="T"><span>Temperature</span><output id="Tout" for="T">1.00</output></label>
+          <input id="T" type="range" min="0.25" max="2.5" step="0.05" value="1">
+          <div class="ends"><span>colder</span><span>hotter</span></div>
+        </div>
+        <div class="ctl">
+          <label class="top" for="M"><span>Particle mass</span><output id="Mout" for="M">1.00</output></label>
+          <input id="M" type="range" min="0.6" max="3" step="0.05" value="1">
+          <div class="ends"><span>lighter</span><span>heavier</span></div>
+        </div>
+      </div>
+      <div class="row">
+        <span class="lbl">Restart from</span>
+        <div class="btns" id="presets">
+          <button type="button" data-preset="equal" aria-pressed="true">Equal speeds</button>
+          <button type="button" data-preset="camps" aria-pressed="false">Slow and fast camps</button>
+          <button type="button" data-preset="thermal" aria-pressed="false">Already settled</button>
+        </div>
+      </div>
+      <div class="row">
+        <span class="lbl">Playback</span>
+        <button type="button" id="pause" class="solid">Pause</button>
+        <div class="seg" role="radiogroup" aria-label="Time speed">
+          <input type="radio" name="ts" id="ts1" value="0.25"><label for="ts1">¼×</label>
+          <input type="radio" name="ts" id="ts2" value="1" checked><label for="ts2">1×</label>
+          <input type="radio" name="ts" id="ts3" value="3"><label for="ts3">3×</label>
+        </div>
+        <label class="chk"><input type="checkbox" id="trails">Trails</label>
+        <label class="chk"><input type="checkbox" id="avg">Average over time</label>
+      </div>
+    </section>
+    </div>
+    <div class="col">
+    <section class="panel p2" aria-label="Speed distribution">
+      <div class="ph">
+        <h2>Speeds</h2>
+        <div class="legend">
+          <span><i class="sw bar"></i>measured</span>
+          <span><i class="sw theory"></i><b id="lgMain" style="font-weight:400">2D theory</b></span>
+          <span><i class="sw ghost"></i><b id="lgGhost" style="font-weight:400">3D theory</b></span>
+        </div>
+      </div>
+      <canvas id="hist" class="cv hist" role="img" aria-label="Histogram of particle speeds compared with the theoretical curve"></canvas>
+      <p class="hint">Hover a bar to light up the particles moving at that speed.</p>
+      <div class="stats">
+        <div class="stat"><span class="k">Most likely</span><span class="v" id="stPeak">0</span><span class="s">px/s, theory</span></div>
+        <div class="stat"><span class="k">Mean speed</span><span class="v" id="stMean">0</span><span class="s" id="stMeanT">theory 0</span></div>
+        <div class="stat"><span class="k">Hits each</span><span class="v" id="stColl">0.0</span><span class="s">since restart</span></div>
+        <div class="stat"><span class="k">Fit to curve</span><span class="v" id="stFit">0%</span><div class="meter"><i id="fitBar"></i></div></div>
+      </div>
+      <div class="formula">
+        <div class="eq" id="eq"></div>
+        <p class="eqnote" id="eqNote"></p>
+      </div>
+    </section>
+
+    <section class="panel p4" aria-label="Velocity space">
+      <div class="ph"><h2>Velocity space</h2></div>
+      <div class="vwrap">
+        <canvas id="vel" class="cv vel" role="img" aria-label="Scatter of particle velocity components with rings of equal speed"></canvas>
+        <div>
+          <p id="velCap"></p>
+          <p>Rings every 100 px/s. The dashed ring marks the most likely speed.</p>
+        </div>
+      </div>
+    </section>
+    </div>
+  </div>
+  <p class="foot">Source and write-up on <a href="https://github.com/rrtrytcg/maxwell-boltzmann-box">GitHub</a>.</p>
+</main>
+
+<script>
+(() => {
+  'use strict';
+
+  const W = 800, H = 500, D3 = 110, N = 400, S0 = 100;
+  const NB = 80, BW = 10, AXMAX = NB * BW, K3 = 0.3, VR = 600, TAU = Math.PI * 2;
+  const R0 = { 2: 5, 3: 8 };
+  const $ = (id) => document.getElementById(id);
+
+  const x = new Float64Array(N), y = new Float64Array(N), z = new Float64Array(N);
+  const vx = new Float64Array(N), vy = new Float64Array(N), vz = new Float64Array(N);
+  const speed = new Float64Array(N), sorted = new Float64Array(N);
+  const cellOf = new Int32Array(N), nxt = new Int32Array(N), head = new Int32Array(60000);
+  const ord = Int32Array.from({ length: N }, (_, i) => i);
+  const hist = new Float64Array(NB + 1), inst = new Float64Array(NB + 1);
+
+  let dim = 2, T = 1, M = 1, timeScale = 1, preset = 'equal';
+  let paused = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let trails = false, averaged = false;
+  let rad = R0[2], collisions = 0, mean = 0, ks = 0.6, hover = -1;
+  let th = {}, lut = [];
+
+  /* ---------- theory ---------- */
+  const sigma = () => S0 * Math.sqrt(T / M);
+  const vpeak = (s, d) => (d === 2 ? s : s * Math.SQRT2);
+  const vmean = (s, d) => (d === 2 ? s * Math.sqrt(Math.PI / 2) : s * Math.sqrt(8 / Math.PI));
+  function erf(v) {
+    const sg = Math.sign(v); v = Math.abs(v);
+    const t = 1 / (1 + 0.3275911 * v);
+    const p = ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t;
+    return sg * (1 - p * Math.exp(-v * v));
+  }
+  function pdf(v, s, d) {
+    const e = Math.exp(-v * v / (2 * s * s));
+    return d === 2 ? (v / (s * s)) * e : Math.sqrt(2 / Math.PI) * (v * v / (s * s * s)) * e;
+  }
+  function cdf(v, s, d) {
+    const u = v / s, e = Math.exp(-u * u / 2);
+    return d === 2 ? 1 - e : erf(u / Math.SQRT2) - Math.sqrt(2 / Math.PI) * u * e;
+  }
+  function gauss() {
+    return Math.sqrt(-2 * Math.log(1 - Math.random())) * Math.cos(TAU * Math.random());
+  }
+
+  /* ---------- physics ---------- */
+  function collide(impulse) {
+    const d3 = dim === 3;
+    const cell = Math.max(2 * rad, 10);
+    const gx = Math.ceil(W / cell), gy = Math.ceil(H / cell), gz = d3 ? Math.ceil(D3 / cell) : 1;
+    head.fill(-1, 0, gx * gy * gz);
+    for (let i = 0; i < N; i++) {
+      const cx = Math.min(gx - 1, Math.max(0, (x[i] / cell) | 0));
+      const cy = Math.min(gy - 1, Math.max(0, (y[i] / cell) | 0));
+      const cz = d3 ? Math.min(gz - 1, Math.max(0, (z[i] / cell) | 0)) : 0;
+      const c = cx + gx * (cy + gy * cz);
+      cellOf[i] = c; nxt[i] = head[c]; head[c] = i;
+    }
+    const md = 2 * rad, md2 = md * md;
+    for (let i = 0; i < N; i++) {
+      const c = cellOf[i];
+      const cx = c % gx, cy = ((c / gx) | 0) % gy, cz = (c / (gx * gy)) | 0;
+      for (let oz = d3 ? -1 : 0; oz <= (d3 ? 1 : 0); oz++) {
+        const zz = cz + oz; if (zz < 0 || zz >= gz) continue;
+        for (let oy = -1; oy <= 1; oy++) {
+          const yy = cy + oy; if (yy < 0 || yy >= gy) continue;
+          for (let ox = -1; ox <= 1; ox++) {
+            const xx = cx + ox; if (xx < 0 || xx >= gx) continue;
+            let j = head[xx + gx * (yy + gy * zz)];
+            while (j !== -1) {
+              if (j > i) {
+                const dx = x[i] - x[j], dy = y[i] - y[j], dz = d3 ? z[i] - z[j] : 0;
+                const d2 = dx * dx + dy * dy + dz * dz;
+                if (d2 < md2 && d2 > 1e-9) {
+                  const dd = Math.sqrt(d2), nx = dx / dd, ny = dy / dd, nz = dz / dd;
+                  if (impulse) {
+                    const rvn = (vx[i] - vx[j]) * nx + (vy[i] - vy[j]) * ny + (d3 ? (vz[i] - vz[j]) * nz : 0);
+                    if (rvn < 0) {
+                      vx[i] -= rvn * nx; vx[j] += rvn * nx;
+                      vy[i] -= rvn * ny; vy[j] += rvn * ny;
+                      if (d3) { vz[i] -= rvn * nz; vz[j] += rvn * nz; }
+                      collisions++;
+                    }
+                  }
+                  const push = (md - dd) * 0.5;
+                  x[i] += nx * push; x[j] -= nx * push;
+                  y[i] += ny * push; y[j] -= ny * push;
+                  if (d3) { z[i] += nz * push; z[j] -= nz * push; }
+                }
+              }
+              j = nxt[j];
+            }
+          }
+        }
+      }
+    }
+  }
+
+  function walls() {
+    const d3 = dim === 3;
+    for (let i = 0; i < N; i++) {
+      if (x[i] < rad) { x[i] = rad; if (vx[i] < 0) vx[i] = -vx[i]; }
+      else if (x[i] > W - rad) { x[i] = W - rad; if (vx[i] > 0) vx[i] = -vx[i]; }
+      if (y[i] < rad) { y[i] = rad; if (vy[i] < 0) vy[i] = -vy[i]; }
+      else if (y[i] > H - rad) { y[i] = H - rad; if (vy[i] > 0) vy[i] = -vy[i]; }
+      if (d3) {
+        if (z[i] < rad) { z[i] = rad; if (vz[i] < 0) vz[i] = -vz[i]; }
+        else if (z[i] > D3 - rad) { z[i] = D3 - rad; if (vz[i] > 0) vz[i] = -vz[i]; }
+      }
+    }
+  }
+
+  function stepSim(dt) {
+    const sdt = dt * timeScale;
+    let ms = 0, vm2 = 0;
+    for (let i = 0; i < N; i++) {
+      const v2 = vx[i] * vx[i] + vy[i] * vy[i] + vz[i] * vz[i];
+      ms += v2; if (v2 > vm2) vm2 = v2;
+    }
+    ms /= N;
+    const s = sigma();
+    const c = Math.sqrt((dim * s * s) / Math.max(ms, 1e-9));
+    const g = 1 + (c - 1) * (1 - Math.exp(-sdt / 0.6));
+    if (Math.abs(g - 1) > 1e-6) {
+      for (let i = 0; i < N; i++) { vx[i] *= g; vy[i] *= g; vz[i] *= g; }
+      vm2 *= g * g;
+    }
+    const rt = R0[dim] * Math.pow(M, 0.25);
+    rad += Math.max(-30 * dt, Math.min(30 * dt, rt - rad));
+    const n = Math.min(40, Math.max(1, Math.ceil(Math.sqrt(vm2) * sdt / (0.5 * rad))));
+    const h = sdt / n;
+    for (let k = 0; k < n; k++) {
+      for (let i = 0; i < N; i++) {
+        x[i] += vx[i] * h; y[i] += vy[i] * h;
+        if (dim === 3) z[i] += vz[i] * h;
+      }
+      walls();
+      collide(true);
+    }
+  }
+
+  function seed() {
+    const s = sigma(), d = dim, rms = Math.sqrt(d) * s;
+    rad = R0[d] * Math.pow(M, 0.25);
+    for (let i = 0; i < N; i++) {
+      x[i] = rad + Math.random() * (W - 2 * rad);
+      y[i] = rad + Math.random() * (H - 2 * rad);
+      z[i] = d === 3 ? rad + Math.random() * (D3 - 2 * rad) : 0;
+    }
+    for (let k = 0; k < 80; k++) { collide(false); walls(); }
+    let ms = 0;
+    for (let i = 0; i < N; i++) {
+      if (preset === 'thermal') {
+        vx[i] = gauss() * s; vy[i] = gauss() * s; vz[i] = d === 3 ? gauss() * s : 0;
+      } else {
+        const sp = preset === 'equal' ? rms : (i & 1 ? 1.356 : 0.4) * rms;
+        if (d === 2) {
+          const a = Math.random() * TAU;
+          vx[i] = sp * Math.cos(a); vy[i] = sp * Math.sin(a); vz[i] = 0;
+        } else {
+          let a = gauss(), b = gauss(), c = gauss();
+          const len = Math.hypot(a, b, c) || 1;
+          vx[i] = sp * a / len; vy[i] = sp * b / len; vz[i] = sp * c / len;
+        }
+      }
+      ms += vx[i] * vx[i] + vy[i] * vy[i] + vz[i] * vz[i];
+    }
+    const k = Math.sqrt((d * s * s) / (ms / N));
+    for (let i = 0; i < N; i++) { vx[i] *= k; vy[i] *= k; vz[i] *= k; }
+    collisions = 0;
+    measure();
+    hist.set(inst);
+    ks = computeKS();
+  }
+
+  function measure() {
+    inst.fill(0);
+    let sum = 0;
+    for (let i = 0; i < N; i++) {
+      const v = Math.sqrt(vx[i] * vx[i] + vy[i] * vy[i] + vz[i] * vz[i]);
+      speed[i] = v; sum += v;
+      inst[Math.min(NB, (v / BW) | 0)]++;
+    }
+    mean = sum / N;
+  }
+
+  function computeKS() {
+    sorted.set(speed); sorted.sort();
+    const s = sigma();
+    let D = 0;
+    for (let i = 0; i < N; i++) {
+      const F = cdf(sorted[i], s, dim);
+      D = Math.max(D, Math.abs((i + 1) / N - F), Math.abs(i / N - F));
+    }
+    return D;
+  }
+
+  /* ---------- theme and canvases ---------- */
+  function hex(h) {
+    h = h.replace('#', '');
+    if (h.length === 3) h = h.replace(/./g, '$&$&');
+    return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+  }
+  function readTheme() {
+    const cs = getComputedStyle(document.documentElement);
+    const g = (n) => cs.getPropertyValue(n).trim();
+    th = { field: g('--field'), fline: g('--fline'), ftext: g('--ftext'), ink: g('--ink'), muted: g('--muted'),
+           rule: g('--rule'), bar: g('--bar'), curve: g('--curve'), ghost: g('--ghost') };
+    const st = ['--c0', '--c1', '--c2', '--c3'].map((n) => hex(g(n)));
+    lut = [];
+    for (let i = 0; i < 64; i++) {
+      const t = (i / 63) * 3, k = Math.min(2, t | 0), f = t - k, a = st[k], b = st[k + 1];
+      lut.push('rgb(' + [0, 1, 2].map((c) => Math.round(a[c] + (b[c] - a[c]) * f)).join(',') + ')');
+    }
+  }
+
+  const mk = (id) => { const cv = $(id); return { cv, ctx: cv.getContext('2d'), w: 1, h: 1, dpr: 1 }; };
+  const bc = mk('box'), hc = mk('hist'), vc = mk('vel');
+  function fit(c) {
+    const r = c.cv.getBoundingClientRect();
+    c.dpr = Math.min(2, window.devicePixelRatio || 1);
+    c.w = r.width; c.h = r.height;
+    c.cv.width = Math.max(1, Math.round(r.width * c.dpr));
+    c.cv.height = Math.max(1, Math.round(r.height * c.dpr));
+  }
+  const ro = new ResizeObserver(() => [bc, hc, vc].forEach(fit));
+  [bc, hc, vc].forEach((c) => ro.observe(c.cv));
+
+  const colorOf = (v) => lut[Math.min(63, (v / 420 * 63) | 0)];
+  const binOf = (v) => Math.min(NB, (v / BW) | 0);
+
+  /* ---------- drawing ---------- */
+  function drawBox() {
+    const { ctx, cv } = bc, k = cv.width / W;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    if (trails) { ctx.globalAlpha = 0.16; ctx.fillStyle = th.field; ctx.fillRect(0, 0, cv.width, cv.height); ctx.globalAlpha = 1; }
+    else { ctx.fillStyle = th.field; ctx.fillRect(0, 0, cv.width, cv.height); }
+
+    if (dim === 3) {
+      const sb = 1 / (1 + K3), bx = (W / 2) * (1 - sb) * k, by = (H / 2) * (1 - sb) * k;
+      ctx.strokeStyle = th.fline; ctx.lineWidth = 1;
+      ctx.strokeRect(bx, by, W * sb * k, H * sb * k);
+      ctx.beginPath();
+      ctx.moveTo(0, 0); ctx.lineTo(bx, by);
+      ctx.moveTo(cv.width, 0); ctx.lineTo(cv.width - bx, by);
+      ctx.moveTo(0, cv.height); ctx.lineTo(bx, cv.height - by);
+      ctx.moveTo(cv.width, cv.height); ctx.lineTo(cv.width - bx, cv.height - by);
+      ctx.stroke();
+      ord.sort((a, b) => z[b] - z[a]);
+    }
+
+    const d3 = dim === 3;
+    for (let n = 0; n < N; n++) {
+      const i = d3 ? ord[n] : n, v = speed[i];
+      const hit = hover < 0 || binOf(v) === hover;
+      let s = 1, a = 1;
+      if (d3) { s = 1 / (1 + K3 * z[i] / D3); a = 0.5 + 0.5 * (1 - z[i] / D3); }
+      ctx.globalAlpha = hit ? a : 0.18;
+      ctx.fillStyle = colorOf(v);
+      ctx.beginPath();
+      ctx.arc((W / 2 + (x[i] - W / 2) * s) * k, (H / 2 + (y[i] - H / 2) * s) * k, rad * s * k, 0, TAU);
+      ctx.fill();
+      if (hover >= 0 && hit) { ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5; ctx.stroke(); }
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  const L = 12, R = 14, TP = 18, BT = 32;
+  function binAt(px) {
+    const v = ((px - L) / (hc.w - L - R)) * AXMAX;
+    return v < 0 || v >= AXMAX ? -1 : Math.floor(v / BW);
+  }
+
+  function drawHist() {
+    const { ctx, w, h, dpr } = hc;
+    if (w < 80) return;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    const pw = w - L - R, ph = h - TP - BT, base = TP + ph;
+    const s = sigma(), yTop = (Math.exp(-0.5) / s) * 1.4;
+    const px = (v) => L + (v / AXMAX) * pw;
+    const py = (f) => base - (Math.min(f, yTop) / yTop) * ph;
+    const mono = '11px "IBM Plex Mono", ui-monospace, monospace';
+
+    ctx.strokeStyle = th.rule; ctx.lineWidth = 1; ctx.fillStyle = th.muted; ctx.font = mono;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.beginPath(); ctx.moveTo(L, base + 0.5); ctx.lineTo(L + pw, base + 0.5); ctx.stroke();
+    const tickStep = pw < 360 ? 200 : 100;
+    for (let v = 0; v <= AXMAX; v += tickStep) {
+      ctx.beginPath(); ctx.moveTo(px(v), base); ctx.lineTo(px(v), base + 4); ctx.stroke();
+      ctx.fillText(String(v), px(v), base + 7);
+    }
+    ctx.textAlign = 'right';
+    ctx.fillText('speed, px/s', L + pw, base + 20);
+
+    const bw = (pw * BW) / AXMAX;
+    for (let b = 0; b < NB; b++) {
+      const dens = hist[b] / (N * BW);
+      if (dens <= 0.0000001) continue;
+      const top = py(dens), on = b === hover;
+      ctx.globalAlpha = on ? 0.95 : 0.6;
+      ctx.fillStyle = on ? th.ink : th.bar;
+      ctx.fillRect(px(b * BW) + 0.5, top, Math.max(1, bw - 1), base - top);
+      if (dens > yTop) { ctx.globalAlpha = 1; ctx.fillStyle = th.curve; ctx.fillRect(px(b * BW) + 0.5, top, Math.max(1, bw - 1), 3); }
+    }
+    ctx.globalAlpha = 1;
+
+    const curve = (d, dash, color, lw) => {
+      ctx.beginPath();
+      for (let i = 0; i <= 240; i++) {
+        const v = (i / 240) * AXMAX, X = px(v), Y = py(pdf(v, s, d));
+        if (i) ctx.lineTo(X, Y); else ctx.moveTo(X, Y);
+      }
+      ctx.setLineDash(dash); ctx.strokeStyle = color; ctx.lineWidth = lw; ctx.stroke(); ctx.setLineDash([]);
+    };
+    curve(dim === 2 ? 3 : 2, [5, 4], th.ghost, 1.5);
+    curve(dim, [], th.curve, 2.5);
+
+    const vp = vpeak(s, dim);
+    ctx.strokeStyle = th.curve; ctx.lineWidth = 1; ctx.setLineDash([3, 4]);
+    ctx.beginPath(); ctx.moveTo(px(vp) + 0.5, TP); ctx.lineTo(px(vp) + 0.5, base); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = th.curve; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText('peak ' + Math.round(vp), px(vp) + 6, TP);
+
+    if (hover >= 0) {
+      ctx.fillStyle = th.ink; ctx.textAlign = 'right';
+      const lo = hover * BW, n = inst[hover];
+      ctx.fillText(lo + '–' + (lo + BW) + ' px/s · ' + n + (n === 1 ? ' particle' : ' particles'), L + pw, TP);
+    }
+  }
+
+  function drawVel() {
+    const { ctx, w, h, dpr } = vc;
+    if (w < 40) return;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = th.field; ctx.fillRect(0, 0, w, h);
+    const cx = w / 2, cy = h / 2, sc = (w / 2 - 4) / VR, s = sigma();
+
+    ctx.strokeStyle = th.fline; ctx.lineWidth = 1;
+    for (let r = 100; r <= 500; r += 100) { ctx.beginPath(); ctx.arc(cx, cy, r * sc, 0, TAU); ctx.stroke(); }
+    ctx.beginPath(); ctx.moveTo(0, cy + 0.5); ctx.lineTo(w, cy + 0.5); ctx.moveTo(cx + 0.5, 0); ctx.lineTo(cx + 0.5, h); ctx.stroke();
+
+    if (hover >= 0) {
+      const rOut = (hover + 1) * BW * sc, rIn = hover * BW * sc;
+      ctx.beginPath(); ctx.arc(cx, cy, rOut, 0, TAU); ctx.arc(cx, cy, rIn, 0, TAU, true);
+      ctx.globalAlpha = 0.35; ctx.fillStyle = th.curve; ctx.fill(); ctx.globalAlpha = 1;
+    }
+    ctx.setLineDash([4, 4]); ctx.strokeStyle = th.curve; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(cx, cy, vpeak(s, dim) * sc, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
+
+    for (let i = 0; i < N; i++) {
+      const hit = hover < 0 || binOf(speed[i]) === hover;
+      ctx.globalAlpha = hit ? 0.95 : 0.25;
+      ctx.fillStyle = colorOf(speed[i]);
+      ctx.beginPath(); ctx.arc(cx + vx[i] * sc, cy - vy[i] * sc, hit && hover >= 0 ? 2.6 : 2, 0, TAU); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  /* ---------- readouts and controls ---------- */
+  const EQ2 = '<i>f</i>(<i>v</i>) = (<i>m</i>/<i>kT</i>) · <i>v</i> · e<sup>−<i>mv</i>²/2<i>kT</i></sup>';
+  const EQ3 = '<i>f</i>(<i>v</i>) = 4π (<i>m</i>/2π<i>kT</i>)<sup>3/2</sup> · <i>v</i>² · e<sup>−<i>mv</i>²/2<i>kT</i></sup>';
+  const CAP2 = 'Each dot is one particle’s velocity (vx, vy). Dots crowd the middle, but the ring at speed v has a length proportional to v. Crowding falls with v while ring length rises, so the speed peaks away from zero.';
+  const CAP3 = 'Each dot is one particle’s velocity, seen along one axis. The shell at speed v is a sphere with area proportional to v², which pushes the peak further out than in 2D.';
+
+  function labels() {
+    $('eq').innerHTML = dim === 2 ? EQ2 : EQ3;
+    $('velCap').textContent = dim === 2 ? CAP2 : CAP3;
+    $('lgMain').textContent = dim + 'D theory';
+    $('lgGhost').textContent = (dim === 2 ? 3 : 2) + 'D theory';
+    note();
+  }
+  function note() {
+    const s = sigma();
+    $('eqNote').textContent = dim === 2
+      ? 'Peak at √(kT/m) = ' + Math.round(s) + ' px/s. Heating the gas or lightening the particles moves it right.'
+      : 'Peak at √(2kT/m) = ' + Math.round(s * Math.SQRT2) + ' px/s. The v² factor puts it further right than the 2D peak.';
+  }
+  function stats() {
+    const s = sigma();
+    $('stPeak').textContent = Math.round(vpeak(s, dim));
+    $('stMean').textContent = Math.round(mean);
+    $('stMeanT').textContent = 'theory ' + Math.round(vmean(s, dim));
+    $('stColl').textContent = ((2 * collisions) / N).toFixed(1);
+    const f = Math.max(0, Math.round((1 - ks) * 100));
+    $('stFit').textContent = f + '%';
+    $('fitBar').style.width = f + '%';
+  }
+
+  $('T').addEventListener('input', (e) => { T = +e.target.value; $('Tout').textContent = T.toFixed(2); note(); });
+  $('M').addEventListener('input', (e) => { M = +e.target.value; $('Mout').textContent = M.toFixed(2); note(); });
+  document.querySelectorAll('input[name="dim"]').forEach((r) => r.addEventListener('change', (e) => {
+    dim = +e.target.value; seed(); labels();
+  }));
+  document.querySelectorAll('input[name="ts"]').forEach((r) => r.addEventListener('change', (e) => { timeScale = +e.target.value; }));
+  $('presets').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    preset = b.dataset.preset;
+    $('presets').querySelectorAll('button').forEach((o) => o.setAttribute('aria-pressed', String(o === b)));
+    seed();
+  });
+  const syncPause = () => { $('pause').textContent = paused ? 'Play' : 'Pause'; };
+  $('pause').addEventListener('click', () => { paused = !paused; syncPause(); });
+  $('trails').addEventListener('change', (e) => { trails = e.target.checked; });
+  $('avg').addEventListener('change', (e) => { averaged = e.target.checked; });
+
+  hc.cv.style.touchAction = 'pan-y';
+  hc.cv.addEventListener('pointermove', (e) => { hover = binAt(e.clientX - hc.cv.getBoundingClientRect().left); });
+  hc.cv.addEventListener('pointerdown', (e) => { hover = binAt(e.clientX - hc.cv.getBoundingClientRect().left); });
+  ['pointerleave', 'pointercancel'].forEach((t) => hc.cv.addEventListener(t, () => { hover = -1; }));
+
+  /* ---------- main loop ---------- */
+  let last = performance.now(), frame = 0, statAt = 0;
+  function loop(t) {
+    requestAnimationFrame(loop);
+    const dt = Math.min(0.05, (t - last) / 1000); last = t; frame++;
+    if (frame % 30 === 1) readTheme();
+    if (!paused) {
+      stepSim(dt);
+      measure();
+      const a = 1 - Math.exp(-dt / (averaged ? 4 : 0.25));
+      for (let b = 0; b <= NB; b++) hist[b] += (inst[b] - hist[b]) * a;
+      if (frame % 5 === 0) ks = computeKS();
+    }
+    drawBox(); drawHist(); drawVel();
+    if (t - statAt > 120) { statAt = t; stats(); }
+  }
+
+  readTheme();
+  [bc, hc, vc].forEach(fit);
+  seed();
+  labels();
+  syncPause();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
